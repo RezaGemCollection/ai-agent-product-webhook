@@ -50,8 +50,8 @@ jspm_packages/
 .env.test.local
 .env.production.local
 
-# Product data (keep private)
-product_details.json
+# Product data (keep private) - temporarily commented for Railway deployment
+# product_details.json
 
 # IDE files
 .vscode/
