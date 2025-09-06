@@ -8,16 +8,19 @@ A webhook service for your gem collection data that integrates with Dialogflow C
 - **Health Check**: `/` - Service status and product count
 - **Stone Types**: `/stone-types` - Get all available stone types
 - **Product Search**: `/products/:stoneType` - Get products by stone type
+- **Fuzzy Search**: `/search/:query` - Flexible search with partial matching
 - **Rich Content**: Returns formatted responses with images and product details for Dialogflow CX
+- **Smart Matching**: Exact match first, then partial matching for better user experience
 
 ## Project Structure
 
 ```
 ├── server.js              # Main Express.js server
 ├── package.json           # Node.js dependencies and scripts
-├── product_details.json   # Your gem collection data
+├── product_details.json   # Your gem collection data (PRIVATE - not in repo)
 ├── railway.json          # Railway deployment configuration
 ├── .gitignore            # Git ignore rules
+├── update_urls.js        # Script to update product URLs
 └── README.md             # This file
 ```
 
@@ -28,7 +31,12 @@ A webhook service for your gem collection data that integrates with Dialogflow C
    npm install
    ```
 
-2. **Run the server**:
+2. **Update product URLs** (run this once to update URLs to your domain):
+   ```bash
+   node update_urls.js
+   ```
+
+3. **Run the server**:
    ```bash
    npm start
    ```
@@ -42,7 +50,17 @@ A webhook service for your gem collection data that integrates with Dialogflow C
    - Health check: `GET http://localhost:3000/`
    - Stone types: `GET http://localhost:3000/stone-types`
    - Products by type: `GET http://localhost:3000/products/tourmaline`
+   - Fuzzy search: `GET http://localhost:3000/search/moon`
    - Webhook: `POST http://localhost:3000/webhook`
+
+## Important: Product Data Privacy
+
+**Your `product_details.json` file is now excluded from the repository** to keep your product data private. When deploying to Railway, you'll need to upload this file separately.
+
+### For Railway Deployment:
+1. Keep your `product_details.json` file locally
+2. Upload it to Railway after deployment using Railway's file system or environment variables
+3. Or use Railway's file upload feature in the dashboard
 
 ## Railway Deployment
 
@@ -121,8 +139,11 @@ https://your-project-name.railway.app
 2. **Add a parameter**:
    - Parameter name: `stone_name`
    - Entity type: `@sys.any` or create a custom entity
-3. **Enable webhook fulfillment** for this intent
-4. **Test with phrases like**:
+3. **Set up route conditions**:
+   - First route: `$session.params.stone_name = ""` (when no stone name provided)
+   - Second route: `$session.params.stone_name != ""` (when stone name is provided)
+4. **Enable webhook fulfillment** for the second route with tag: `product_lookup`
+5. **Test with phrases like**:
    - "Show me tourmaline products"
    - "I want to see moonstone beads"
    - "Find selenite products"
@@ -132,6 +153,9 @@ https://your-project-name.railway.app
 Dialogflow CX will send requests in this format:
 ```json
 {
+  "fulfillmentInfo": {
+    "tag": "product_lookup"
+  },
   "sessionInfo": {
     "parameters": {
       "stone_name": "tourmaline"
@@ -178,6 +202,9 @@ The webhook returns rich content for Dialogflow CX:
 curl -X POST https://your-project-name.railway.app/webhook \
   -H "Content-Type: application/json" \
   -d '{
+    "fulfillmentInfo": {
+      "tag": "product_lookup"
+    },
     "sessionInfo": {
       "parameters": {
         "stone_name": "tourmaline"
@@ -193,6 +220,9 @@ curl -X POST https://your-project-name.railway.app/webhook \
 4. Body (raw JSON):
    ```json
    {
+     "fulfillmentInfo": {
+       "tag": "product_lookup"
+     },
      "sessionInfo": {
        "parameters": {
          "stone_name": "tourmaline"
@@ -224,6 +254,16 @@ Railway will automatically set the `PORT` environment variable. The service will
 - `GET /` - Service status and product count
 - `GET /stone-types` - List all available stone types
 - `GET /products/:stoneType` - Get products for a specific stone type
+- `GET /search/:query` - Fuzzy search with partial matching
+
+## Production Features:
+
+- **Smart Matching**: Tries exact match first, then partial matching
+- **Fallback Images**: Uses placeholder if product image is missing
+- **Session Persistence**: Returns stone_name parameter to Dialogflow CX
+- **Request Logging**: Logs all webhook requests for debugging
+- **Error Handling**: Graceful fallbacks for missing data
+- **Flexible Search**: Handles variations like "moon stone" vs "moonstone"
 
 ## Support
 

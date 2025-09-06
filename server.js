@@ -3,7 +3,7 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-// Load your JSON data
+// Load your JSON data (keep this file private)
 const products = JSON.parse(fs.readFileSync("product_details.json"));
 
 // Health check endpoint
@@ -18,6 +18,20 @@ app.get("/", (req, res) => {
 // Webhook endpoint for Dialogflow CX
 app.post("/webhook", (req, res) => {
   try {
+    // Log request for debugging
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
+    
+    // Check webhook tag for Dialogflow CX
+    const tag = req.body.fulfillmentInfo?.tag;
+    
+    if (tag !== "product_lookup") {
+      return res.json({
+        fulfillment_response: {
+          messages: [{ text: { text: ["Webhook tag mismatch."] } }]
+        }
+      });
+    }
+
     // Get the stone name typed by user
     const stoneType = req.body.sessionInfo?.parameters?.stone_name?.toLowerCase();
 
@@ -29,35 +43,53 @@ app.post("/webhook", (req, res) => {
       });
     }
 
-    // Filter products by stone_type
-    const matched = products.filter(p => p.stone_type.toLowerCase() === stoneType);
+    // Filter products with flexible matching (exact match first, then partial)
+    let matched = products.filter(p => p.stone_type.toLowerCase() === stoneType);
+    
+    // If no exact match, try partial matching
+    if (matched.length === 0) {
+      matched = products.filter(p => 
+        p.stone_type.toLowerCase().includes(stoneType) ||
+        stoneType.includes(p.stone_type.toLowerCase())
+      );
+    }
 
     if (matched.length === 0) {
       return res.json({
         fulfillment_response: {
-          messages: [{ text: { text: [`No products found for ${stoneType}.`] } }]
+          messages: [{ text: { text: [`No products found for ${stoneType}. Try searching for: tourmaline, moonstone, selenite, or agate.`] } }]
         }
       });
     }
 
-    // Build rich content for Dialogflow CX
-    const richContent = matched.map(p => [
+    // Build cards for each product (proper CX format with fallbacks)
+    const richContent = matched.map(p => ([
       {
         type: "image",
-        rawUrl: p.main_image,
-        accessibilityText: p.title
+        rawUrl: p.main_image || "https://via.placeholder.com/300x300?text=Gem+Image",
+        accessibilityText: p.title || "Gem product image"
       },
       {
         type: "info",
-        title: p.title,
-        subtitle: `Available sizes: ${p.sizes.join(", ")}`,
-        actionLink: p.product_url
+        title: p.title || "Gem Product",
+        subtitle: `Available sizes: ${p.sizes ? p.sizes.join(", ") : "Various sizes"}`,
+        actionLink: p.product_url || "https://rezagemcollection.ca"
       }
-    ]);
+    ]));
 
     res.json({
+      sessionInfo: {
+        parameters: {
+          stone_name: stoneType
+        }
+      },
       fulfillment_response: {
         messages: [
+          {
+            text: {
+              text: [`Here are the products for ${stoneType} (${matched.length} found):`]
+            }
+          },
           {
             payload: {
               richContent: richContent
@@ -87,6 +119,36 @@ app.get("/products/:stoneType", (req, res) => {
   const stoneType = req.params.stoneType.toLowerCase();
   const matched = products.filter(p => p.stone_type.toLowerCase() === stoneType);
   res.json({ products: matched, count: matched.length });
+});
+
+// Fuzzy search endpoint for testing flexible matching
+app.get("/search/:query", (req, res) => {
+  const query = req.params.query.toLowerCase();
+  
+  // Exact match first
+  let exactMatches = products.filter(p => p.stone_type.toLowerCase() === query);
+  
+  // Partial matches
+  let partialMatches = products.filter(p => 
+    p.stone_type.toLowerCase().includes(query) ||
+    query.includes(p.stone_type.toLowerCase()) ||
+    p.title.toLowerCase().includes(query)
+  );
+  
+  // Remove duplicates
+  const allMatches = [...new Set([...exactMatches, ...partialMatches])];
+  
+  res.json({
+    query: query,
+    exactMatches: exactMatches.length,
+    partialMatches: partialMatches.length,
+    totalMatches: allMatches.length,
+    results: allMatches.slice(0, 10).map(p => ({
+      title: p.title,
+      stone_type: p.stone_type,
+      product_url: p.product_url
+    }))
+  });
 });
 
 const PORT = process.env.PORT || 3000;

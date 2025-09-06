@@ -50,6 +50,9 @@ jspm_packages/
 .env.test.local
 .env.production.local
 
+# Product data (keep private)
+product_details.json
+
 # IDE files
 .vscode/
 .idea/
