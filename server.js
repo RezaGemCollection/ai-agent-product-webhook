@@ -62,16 +62,43 @@ app.post("/webhook", (req, res) => {
       });
     }
 
-    // Build cards for each product (proper CX format with fallbacks)
+    // Determine how many products to show
+    let maxProducts;
+    if (matched.length === 1) {
+      maxProducts = 1;
+    } else {
+      maxProducts = Math.min(5, Math.max(2, matched.length));
+    }
+    
+    const displayedProducts = matched.slice(0, maxProducts);
+    
+    // Build carousel items for displayed products
+    const carouselItems = displayedProducts.map(p => ({
+      title: p.title || "Gem Product",
+      subtitle: `Available sizes: ${p.sizes ? p.sizes.join(", ") : "Various sizes"}`,
+      imageUri: p.main_image || "https://via.placeholder.com/300x300/ffffff/cccccc?text=Reza+Gem+Collection",
+      actionLink: p.product_url || "https://rezagemcollection.ca",
+      accessibilityText: p.title || "Gem Product"
+    }));
+    
+    // Add "View all" item to carousel if there are more products
+    if (matched.length > maxProducts) {
+      const collectionUrl = `https://rezagemcollection.ca/collections/${stoneType}-gemstone-beads`;
+      carouselItems.push({
+        title: "View all products",
+        subtitle: `See ${matched.length - maxProducts} more ${stoneType} products`,
+        imageUri: "https://via.placeholder.com/300x300/ffffff/cccccc?text=View+All+Products",
+        actionLink: collectionUrl,
+        accessibilityText: "View all products"
+      });
+    }
+    
+    // Build carousel format for Messenger compatibility
     const richContent = [
-      ...matched.map(p => ({
-        type: "info",
-        title: p.title || "Gem Product",
-        subtitle: `Available sizes: ${p.sizes ? p.sizes.join(", ") : "Various sizes"}`,
-        actionLink: p.product_url || "https://rezagemcollection.ca",
-        rawUrl: p.main_image || "https://via.placeholder.com/300x300?text=Gem+Image",
-        accessibilityText: p.title || "Gem product image"
-      }))
+      {
+        type: "carousel",
+        items: carouselItems
+      }
     ];
 
     res.json({
@@ -84,7 +111,7 @@ app.post("/webhook", (req, res) => {
         messages: [
           {
             text: {
-              text: [`Here are the products for ${stoneType} (${matched.length} found):`]
+              text: [`Here are ${displayedProducts.length} ${stoneType} products${matched.length > maxProducts ? ` (showing first ${maxProducts} of ${matched.length} total)` : ''}:`]
             }
           },
           {
