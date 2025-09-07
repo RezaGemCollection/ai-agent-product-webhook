@@ -33,7 +33,7 @@ app.post("/webhook", (req, res) => {
     }
 
     // Get the stone name typed by user
-    const stoneType = req.body.sessionInfo?.parameters?.stone_name?.toLowerCase();
+    const stoneType = req.body.sessionInfo?.parameters?.gemstone?.toLowerCase();
 
     if (!stoneType) {
       return res.json({
@@ -63,24 +63,21 @@ app.post("/webhook", (req, res) => {
     }
 
     // Build cards for each product (proper CX format with fallbacks)
-    const richContent = matched.map(p => ([
-      {
-        type: "image",
-        rawUrl: p.main_image || "https://via.placeholder.com/300x300?text=Gem+Image",
-        accessibilityText: p.title || "Gem product image"
-      },
-      {
+    const richContent = [
+      ...matched.map(p => ({
         type: "info",
         title: p.title || "Gem Product",
         subtitle: `Available sizes: ${p.sizes ? p.sizes.join(", ") : "Various sizes"}`,
-        actionLink: p.product_url || "https://rezagemcollection.ca"
-      }
-    ]));
+        actionLink: p.product_url || "https://rezagemcollection.ca",
+        rawUrl: p.main_image || "https://via.placeholder.com/300x300?text=Gem+Image",
+        accessibilityText: p.title || "Gem product image"
+      }))
+    ];
 
     res.json({
       sessionInfo: {
         parameters: {
-          stone_name: stoneType
+          gemstone: stoneType
         }
       },
       fulfillment_response: {
